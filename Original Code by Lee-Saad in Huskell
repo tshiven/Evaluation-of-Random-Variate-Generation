@@ -1,0 +1,41 @@
+# Found on youtube titled [PLDI'25] Random Variate Generation with Formal Guarantees
+type Bit = Int
+type BinaryString = [Bit]
+type BinaryCodedDist = [Bit] -> Float
+
+-- Obtain a fair random bit from the entropy source.
+randBit :: Bit
+
+-- Extract bit from a float (Algorithms 3 and 4).
+extractBit :: Float -> Int -> Bit
+
+-- Generate the next random bit from the binary coded distribution.
+-- Returns the generated bit and the updated number of calls to randBit.
+generateNextBit :: (BinaryCodedDist) -> BinaryString -> Int -> (Bit, Int)
+generateNextBit p b l = do
+  let pb0 = p (0:b)
+  let pb1 = p (1:b)
+  let bit0 = extractBit pb0 l
+  let bit1 = extractBit pb1 l
+  case (bit0, bit1) of
+    (1, 0)     -> (0, l)
+    (0, 1)     -> (1, l)
+    otherwise -> do
+      loop l
+      where loop j = do
+              let x = randBit
+              let j' = j + 1
+              let bit0 = extractBit pb0 j'
+              let bit1 = extractBit pb1 j'
+              if      x == 0 && bit0 == 1 then (0, j')
+              else if x == 1 && bit1 == 1 then (1, j')
+              else    loop j'
+
+-- Overall recursive function.
+generate :: (BinaryCodedDist) -> BinaryString
+generate p = generate_ [] 0
+  where
+    generate_ :: BinaryString -> Int -> BinaryString
+    generate_ b l =
+      let (x, l') = generateNextBit p b l
+      in x : (generate_ (x : b) (l+l'))
