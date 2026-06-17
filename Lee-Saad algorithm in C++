@@ -1,0 +1,132 @@
+#include <vector>
+#include <functional>
+using namespace std;
+
+using Bit             = int;                           //Bit respresents int
+using BinaryString    = vector<Bit>;                   //BinaryString represents vector of Bits
+using BinaryCodedDist = function<float(BinaryString)>; //any function that takes string of bits snd returns float
+
+// Returns an unbiased fair random bit: 0 or 1
+Bit randBit();
+
+// Returns bit at column position
+Bit extractBit(float value, int position);
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: prepend a bit to a BinaryString
+// The newest generated bit is stored at the front,
+// ─────────────────────────────────────────────────────────────────────────────
+
+BinaryString prependBit(Bit bit, const BinaryString& bs) {
+    BinaryString result;
+    result.reserve(bs.size() + 1);
+
+    result.push_back(bit); //index 0
+
+    for (int i = 0; i < (int)bs.size(); i++) result.push_back(bs[i]); //adding other elements of list
+
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inputs:
+//   p      - binary-coded distribution
+//   prefix - bits generated so far, newest bit at front
+//   l      - binary column to start inspecting
+//
+// Outputs:
+//   outBit    - generated next bit
+//   outColumn - column used to make the decision
+// ─────────────────────────────────────────────────────────────────────────────
+void generateNextBit(const BinaryCodedDist& p, const BinaryString&  prefix, int l,Bit& outBit, int& outColumn) {
+
+    //This is the step we will be caching
+    float pb0 = p(prependBit(0, prefix)); //CDF(mid) - CDF(left)
+    float pb1 = p(prependBit(1, prefix)); //CDF(right) - CDF(mid)
+    
+    Bit bit0 = extractBit(pb0, l); //extracting bit from given level
+    Bit bit1 = extractBit(pb1, l);
+
+    
+    //One way of thinking is that these also end up happening if we have like Prob(A) =1 , Prob(B) = 0 since we don't have any fractional component.
+    if (bit0 == 1 && bit1 == 0) {
+        outBit    = 0;
+        outColumn = l;
+        return;
+    }
+
+    if (bit0 == 0 && bit1 == 1) {
+        outBit    = 1;
+        outColumn = l;
+        return;
+    }
+
+    //We usally go for other paths since we deal with fractional probabilities
+    int j = l;
+
+    while (true) {
+        Bit rand = randBit();
+
+        int depth = j + 1; //going a level deeper
+
+        bit0 = extractBit(pb0, depth);
+        bit1 = extractBit(pb1, depth);
+
+        if (rand == 0 && bit0 == 1) {
+            outBit    = 0;
+            outColumn = depth;
+            return;
+        }
+
+        if (rand == 1 && bit1 == 1) {
+            outBit    = 1;
+            outColumn = depth;
+            return;
+        }
+        j = depth;
+    }
+}
+
+// LeeSaadBitGenerator
+// C++ cannot return an infinite lazy list like Haskell.
+class LeeSaadBitGenerator {
+private:
+    BinaryCodedDist p;
+    BinaryString    prefix;
+    int             l;
+
+public:
+    LeeSaadBitGenerator(const BinaryCodedDist& dist):p(dist), prefix({}), l(0) {}
+
+    Bit next() {
+        Bit x;
+        int lPrime;
+
+        generateNextBit(p, prefix, l, x, lPrime);
+
+        // Matches Haskell:
+        //
+        //   generate_ (x:b) (l'+1)
+        prefix = prependBit(x, prefix);
+        l      = lPrime + 1;
+
+        return x;
+    }
+};
+
+// generateNBits
+// Since C++ vectors are not lazy infinite lists, this function generates
+// exactly n bits from the Lee-Saad bit stream.
+BinaryString generateNBits(const BinaryCodedDist& p, int n) {
+    LeeSaadBitGenerator generator(p);
+
+    BinaryString output;
+    output.reserve(n);
+
+    for (int i = 0; i < n; i++) {
+        output.push_back(generator.next());
+    }
+
+    return output;
+}
